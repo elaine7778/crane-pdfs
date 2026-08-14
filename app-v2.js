@@ -426,7 +426,7 @@
         box.remove();
         link.dataset.pdfAuthorized = "true";
         link.querySelector(".pdfLock")?.remove();
-        smartDownload(link.dataset.pdfUrl);
+        showChannelPicker(link.dataset.pdfUrl);
       } else {
         box.querySelector("#pdf-password-error").hidden = false;
         input.value = "";
@@ -436,6 +436,45 @@
     box.querySelector("#pdf-password-confirm").addEventListener("click", confirm);
     box.querySelector("#pdf-password-cancel").addEventListener("click", () => box.remove());
     input.addEventListener("keydown", (event) => { if (event.key === "Enter") confirm(); });
+  }
+
+  // 通道选择：密码通过后展示可用的下载通道，自动推荐最快的一个
+  function showChannelPicker(url) {
+    const modalRoot = document.getElementById("modal-root");
+    const existing = modalRoot.querySelector("#pdf-channel-box");
+    if (existing) existing.remove();
+    const box = document.createElement("div");
+    box.id = "pdf-channel-box";
+    box.className = "pdfChannelBox";
+    const labels = ["最快通道（自动检测）", "镜像 ghfast.top", "镜像 gh-proxy.com", "GitHub 直连"];
+    const urls = [null, ...PDF_CHANNELS.slice(1).map((p) => p + url), url];
+    // urls[0] = null 表示自动检测
+    box.innerHTML = `
+      <div class="pdfChannelInner">
+        <b>选择下载通道</b>
+        <small>不同通道速度不同，建议选第一个（自动检测最快）</small>
+        <div class="pdfChannelList">
+          ${urls
+            .map(
+              (u, i) => `<button class="pdfChannelBtn" type="button" data-url="${u || ""}" data-auto="${u ? "0" : "1"}"><span>${labels[i]}</span><em>${i === 0 ? "推荐" : "备用"}</em></button>`
+            )
+            .join("")}
+        </div>
+        <button class="pdfChannelCancel" type="button">取消</button>
+      </div>`;
+    modalRoot.appendChild(box);
+    const close = () => box.remove();
+    box.querySelectorAll(".pdfChannelBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        close();
+        if (btn.dataset.auto === "1") {
+          smartDownload(url);
+        } else {
+          window.open(btn.dataset.url, "_blank", "noopener,noreferrer");
+        }
+      });
+    });
+    box.querySelector(".pdfChannelCancel").addEventListener("click", close);
   }
 
   function openPrice() {
