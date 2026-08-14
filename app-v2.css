@@ -75,3 +75,9 @@
 .pdfChannelBtn:not(:first-child) em{background:#eef1f5;color:#6b7280}
 .pdfChannelCancel{width:100%;border:0;background:#eef1f5;border-radius:9px;padding:10px;cursor:pointer;font-size:13px;color:#6b7280}
 .pdfChannelCancel:hover{background:#e5e7eb}
+
+.pdfChannelBtn.primary{border-color:var(--orange,#f36b21);background:rgba(243,107,33,.06)}
+.pdfChannelBtn.primary em{background:var(--orange,#f36b21);color:#fff}
+.pdfChannelBtn.danger{border-color:#fca5a5;color:#991b1b;background:#fef2f2}
+.pdfChannelBtn.danger em{background:#fee2e2;color:#991b1b}
+.pdfChannelBtn.danger:hover{background:#fee2e2 !important}

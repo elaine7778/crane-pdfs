@@ -448,15 +448,15 @@
     box.className = "pdfChannelBox";
     const labels = ["最快通道（自动检测）", "镜像 ghfast.top", "镜像 gh-proxy.com", "GitHub 直连"];
     const urls = [null, ...PDF_CHANNELS.slice(1).map((p) => p + url), url];
-    // urls[0] = null 表示自动检测
+    const tags = ["推荐", "镜像", "镜像", "国内可能超时"];
     box.innerHTML = `
       <div class="pdfChannelInner">
         <b>选择下载通道</b>
-        <small>不同通道速度不同，建议选第一个（自动检测最快）</small>
+        <small>推荐点"最快通道"，国内直连 GitHub 通常会超时</small>
         <div class="pdfChannelList">
           ${urls
             .map(
-              (u, i) => `<button class="pdfChannelBtn" type="button" data-url="${u || ""}" data-auto="${u ? "0" : "1"}"><span>${labels[i]}</span><em>${i === 0 ? "推荐" : "备用"}</em></button>`
+              (u, i) => `<button class="pdfChannelBtn${i === 3 ? " danger" : ""}${i === 0 ? " primary" : ""}" type="button" data-url="${u || ""}" data-auto="${u ? "0" : "1"}"><span>${labels[i]}</span><em>${tags[i]}</em></button>`
             )
             .join("")}
         </div>
