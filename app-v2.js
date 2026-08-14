@@ -23,9 +23,9 @@
   // 2. ghfast.top 加速镜像
   // 3. gh-proxy.com 加速镜像
   const PDF_CHANNELS = [
-    "",                                     // 直连
-    "https://ghfast.top/",                  // 镜像1
-    "https://gh-proxy.com/",                // 镜像2
+    "https://gh-proxy.com/",               // 镜像1（实测最快 ~2MB/s）
+    "https://ghfast.top/",                 // 镜像2（实测较慢）
+    "",                                     // 直连兜底
   ];
   const CHANNEL_TIMEOUT_MS = 6000;          // 每通道探测超时
 
@@ -446,9 +446,9 @@
     const box = document.createElement("div");
     box.id = "pdf-channel-box";
     box.className = "pdfChannelBox";
-    const labels = ["最快通道（自动检测）", "镜像 ghfast.top", "镜像 gh-proxy.com", "GitHub 直连"];
-    const urls = [null, ...PDF_CHANNELS.slice(1).map((p) => p + url), url];
-    const tags = ["推荐", "镜像", "镜像", "国内可能超时"];
+    const labels = ["最快通道（自动检测）", "镜像 gh-proxy.com", "镜像 ghfast.top", "GitHub 直连"];
+    const urls = [null, ...PDF_CHANNELS.filter((p) => p).map((p) => p + url), url];
+    const tags = ["推荐", "快", "备用", "国内可能超时"];
     box.innerHTML = `
       <div class="pdfChannelInner">
         <b>选择下载通道</b>
