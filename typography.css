@@ -1,0 +1,82 @@
+:root {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif;
+}
+
+body,
+body * {
+  font-family: var(--font-ui) !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  letter-spacing: 0;
+}
+
+.hero h1 {
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.sectionIntro h2,
+.resultHeader h2,
+.priceSection h2,
+.costPlannerHeader h2,
+.libraryModal h2,
+.previewModal h2,
+.priceModal h2 {
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.heroMeta strong,
+.capacityHero strong,
+.priceStrip strong,
+.costEstimateStrip strong,
+.inputWrap input {
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.inputWrap input {
+  line-height: 1.15;
+}
+
+.modelRow h3,
+.comparisonHeader h3,
+.libraryList b {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.specGrid dd,
+.queryPills span,
+.comparisonMeta span,
+th,
+td {
+  line-height: 1.45;
+}
+
+.eyebrow,
+.sectionIntro > span,
+.resultHeader > div > span,
+.priceSection > div > span,
+.costPlannerHeader > div > span,
+.comparisonHeader span,
+.libraryModal header span,
+.previewModal header span,
+.priceModal header span {
+  letter-spacing: 0.1em;
+}
