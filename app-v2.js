@@ -29,16 +29,18 @@
   const CHANNEL_TIMEOUT_MS = 6000;          // 每通道探测超时
 
   // 智能下载：COS 主通道直接下载（国内快）；失败则探测镜像兜底
-  function smartDownload(url) {
+  function smartDownload(link) {
     // 1) 用户手势内同步开标签，保证不被浏览器拦截
+    const url = link.dataset.pdfUrl || link.dataset.pdfOrig;
+    const origName = link.dataset.pdfOrig || url.split("/").pop();
     const win = window.open("", "_blank", "noopener,noreferrer");
     if (!win) {
       window.location.href = url;
       return;
     }
-    const filename = url.split("/").pop();
-    const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(filename)}`;
-    // 2) 优先 COS：用 Image 探测是否存在（PDF 不触发跨域错误），可用则直接下载
+    // COS 存的是原始中文文件名
+    const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(origName)}`;
+    // 2) 优先 COS：用 Image 探测是否存在，可用则直接下载
     const probeImg = new Image();
     let probed = false;
     const useCos = () => {
@@ -49,7 +51,7 @@
     const onProbeFail = () => {
       if (probed) return;
       probed = true;
-      // COS 不可用，退回多通道探测
+      // COS 不可用，退回多通道探测（url 已是 GitHub 映射名）
       const candidates = PDF_CHANNELS.map((prefix) => prefix + url);
       let resolved = false;
       let pending = candidates.length;
@@ -377,7 +379,7 @@
           <header><div><span>${escapeHtml(model.type)}塔机</span><h2>${escapeHtml(model.model)}</h2><p>${model.previewPages.length ? `共 ${model.previewPages.length} 页起重性能资料` : "说明书中未检出可确认的完整起重性能表"}</p></div><div class="previewHeaderActions">${fromLibrary ? `<button id="back-library" type="button">← 返回型号库</button>` : ""}<button class="closeModal" type="button" aria-label="关闭预览">×</button></div></header>
           <div class="previewSpecs"><span>最大幅度 <b>${model.maxRadius}m</b></span><span>最大吊重 <b>${model.maxLoad}t</b></span><span>最大臂端 <b>${model.tipLoad}t</b></span><span>价格匹配 <b>${escapeHtml(data.priceTable[model.priceKey].label)}</b></span></div>
           <div class="manualCanvas manualPages">${model.previewPages.length ? model.previewPages.map((entry, index) => `<figure><figcaption>起重性能 ${index + 1} / ${model.previewPages.length} · PDF第 ${entry.page} 页</figcaption><img src="${escapeHtml(entry.image)}" alt="${escapeHtml(model.model)}说明书第${entry.page}页" loading="${index < 2 ? "eager" : "lazy"}" /></figure>`).join("") : `<div class="emptyState"><strong>未找到可确认的完整起重性能表</strong><p>当前文件可能仅为安装说明书。请下载源PDF，向厂家索取正式起重性能资料后再选型。</p></div>`}</div>
-          <footer><p>请放大查看臂长—幅度—起重量表，并结合实际倍率、吊具及起升高度复核。</p><div class="previewActions">${model.documents.map((document, index) => { const url = escapeHtml(resolvePdfUrl(document.url)); const name = `${model.documents.length > 1 ? `在新标签页打开/下载资料${index + 1}：` : "在新标签页打开/下载源说明书："}${escapeHtml(document.name)}`; return PDF_ACCESS_PASSWORD ? `<span class="pdfDownloadItem"><a href="${url}" target="_blank" rel="noopener noreferrer" data-pdf-url="${url}" data-pdf-authorized="false" class="pdfProtected">${name}<i class="pdfLock">🔒</i></a></span>` : `<a href="${url}" target="_blank" rel="noopener noreferrer">${name}</a>`; }).join("")}</div></footer>
+          <footer><p>请放大查看臂长—幅度—起重量表，并结合实际倍率、吊具及起升高度复核。</p><div class="previewActions">${model.documents.map((document, index) => { const url = escapeHtml(resolvePdfUrl(document.url)); const name = `${model.documents.length > 1 ? `在新标签页打开/下载资料${index + 1}：` : "在新标签页打开/下载源说明书："}${escapeHtml(document.name)}`; return PDF_ACCESS_PASSWORD ? `<span class="pdfDownloadItem"><a href="${url}" target="_blank" rel="noopener noreferrer" data-pdf-url="${url}" data-pdf-orig="${escapeHtml(document.url.split("/").pop())}" data-pdf-authorized="false" class="pdfProtected">${name}<i class="pdfLock">🔒</i></a></span>` : `<a href="${url}" target="_blank" rel="noopener noreferrer">${name}</a>`; }).join("")}</div></footer>
         </section>
       </div>`;
     modalRoot.querySelector(".closeModal").addEventListener("click", closeModal);
@@ -404,7 +406,7 @@
     if (isPdfAuthorized()) {
       link.dataset.pdfAuthorized = "true";
       link.querySelector(".pdfLock")?.remove();
-      smartDownload(link.dataset.pdfUrl);
+      smartDownload(link);
       return;
     }
     const modalRoot = document.getElementById("modal-root");
@@ -434,7 +436,7 @@
         box.remove();
         link.dataset.pdfAuthorized = "true";
         link.querySelector(".pdfLock")?.remove();
-        showChannelPicker(link.dataset.pdfUrl);
+        showChannelPicker(link);
       } else {
         box.querySelector("#pdf-password-error").hidden = false;
         input.value = "";
@@ -447,15 +449,16 @@
   }
 
   // 通道选择：密码通过后展示可用的下载通道，自动推荐最快的一个
-  function showChannelPicker(url) {
+  function showChannelPicker(link) {
     const modalRoot = document.getElementById("modal-root");
     const existing = modalRoot.querySelector("#pdf-channel-box");
     if (existing) existing.remove();
     const box = document.createElement("div");
     box.id = "pdf-channel-box";
     box.className = "pdfChannelBox";
-    const filename = url.split("/").pop();
-    const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(filename)}`;
+    const url = link.dataset.pdfUrl || link.dataset.pdfOrig;
+    const origName = link.dataset.pdfOrig || url.split("/").pop();
+    const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(origName)}`;
     const labels = ["腾讯云 COS（国内高速）", "最快通道（自动检测）", "镜像 gh-proxy.com", "镜像 ghfast.top", "GitHub 直连"];
     const urls = [cosUrl, null, ...PDF_CHANNELS.filter((p) => p).map((p) => p + url), url];
     const tags = ["推荐·快", "自动", "兜底", "兜底", "国内可能超时"];
