@@ -29,31 +29,38 @@
   ];
   const CHANNEL_TIMEOUT_MS = 6000;          // 每通道探测超时
 
-  // 智能下载：并行探测所有通道，选响应最快的一个打开下载（国内网络自动选镜像）
+  // 智能下载：先同步开空白标签（防弹窗拦截），并行探测各通道，
+  // 用最快的通道导航到下载地址；全部超时则直连兜底。
   function smartDownload(url) {
+    // 1) 用户手势内同步开标签，保证不被浏览器拦截
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) {
+      // 极端情况弹窗被拦截，退化为当前窗口跳转
+      window.location.href = url;
+      return;
+    }
+    // 2) 并行探测，选最快通道
     const candidates = PDF_CHANNELS.map((prefix) => prefix + url);
     let resolved = false;
     let pending = candidates.length;
     const controller = new AbortController();
     const globalTimer = setTimeout(() => {
-      // 全部通道超时或失败，直连兜底
       if (!resolved) {
         resolved = true;
-        window.open(url, "_blank", "noopener,noreferrer");
+        win.location.href = url; // 全部超时，直连兜底
       }
-    }, CHANNEL_TIMEOUT_MS + 2000);
+    }, CHANNEL_TIMEOUT_MS + 3000);
     const pick = (candidate) => {
       if (resolved) return;
       resolved = true;
       clearTimeout(globalTimer);
-      window.open(candidate, "_blank", "noopener,noreferrer");
+      win.location.href = candidate;
     };
     candidates.forEach((candidate) => {
       const timer = setTimeout(() => {
         pending -= 1;
         if (pending <= 0 && !resolved) {
-          // 所有探测都超时了，退回直连兜底
-          pick(url);
+          pick(url); // 所有探测超时，直连兜底
         }
       }, CHANNEL_TIMEOUT_MS);
       fetch(candidate, { method: "HEAD", mode: "no-cors", signal: controller.signal })
