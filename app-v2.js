@@ -38,26 +38,9 @@
       window.location.href = url;
       return;
     }
-    // 默认直接用腾讯云 COS（国内高速，存的是原始中文文件名）
+    // 直接用腾讯云 COS（国内高速，存的是原始中文文件名）
     const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(origName)}`;
-    // 简单探测 COS 文件是否存在；不存在则退回 GitHub 直连
-    const probeImg = new Image();
-    let probed = false;
-    probeImg.onload = () => {
-      if (probed) return;
-      probed = true;
-      win.location.href = cosUrl;
-    };
-    probeImg.onerror = () => {
-      if (probed) return;
-      probed = true;
-      win.location.href = url;
-    };
-    probeImg.src = cosUrl;
-    // 兜底：3 秒内未确认，直接走 COS（国内通常极快）
-    setTimeout(() => {
-      if (!probed) { probed = true; win.location.href = cosUrl; }
-    }, 3000);
+    win.location.href = cosUrl;
   }
 
   // GitHub Release 资产名映射表：
