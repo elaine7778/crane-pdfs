@@ -29,31 +29,46 @@
   ];
   const CHANNEL_TIMEOUT_MS = 6000;          // 每通道探测超时
 
-  // 智能下载：依次探测各通道连通性，用第一个可用的通道打开下载
+  // 智能下载：并行探测所有通道，选响应最快的一个打开下载（国内网络自动选镜像）
   function smartDownload(url) {
     const candidates = PDF_CHANNELS.map((prefix) => prefix + url);
-    let channelIndex = 0;
-    const tryNext = () => {
-      if (channelIndex >= candidates.length) {
-        // 全部超时，退回直连兜底
+    let resolved = false;
+    let pending = candidates.length;
+    const controller = new AbortController();
+    const globalTimer = setTimeout(() => {
+      // 全部通道超时或失败，直连兜底
+      if (!resolved) {
+        resolved = true;
         window.open(url, "_blank", "noopener,noreferrer");
-        return;
       }
-      const candidate = candidates[channelIndex];
-      channelIndex += 1;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), CHANNEL_TIMEOUT_MS);
+    }, CHANNEL_TIMEOUT_MS + 2000);
+    const pick = (candidate) => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(globalTimer);
+      window.open(candidate, "_blank", "noopener,noreferrer");
+    };
+    candidates.forEach((candidate) => {
+      const timer = setTimeout(() => {
+        pending -= 1;
+        if (pending <= 0 && !resolved) {
+          // 所有探测都超时了，退回直连兜底
+          pick(url);
+        }
+      }, CHANNEL_TIMEOUT_MS);
       fetch(candidate, { method: "HEAD", mode: "no-cors", signal: controller.signal })
         .then(() => {
           clearTimeout(timer);
-          window.open(candidate, "_blank", "noopener,noreferrer");
+          pick(candidate);
         })
         .catch(() => {
           clearTimeout(timer);
-          tryNext();
+          pending -= 1;
+          if (pending <= 0 && !resolved) {
+            pick(url);
+          }
         });
-    };
-    tryNext();
+    });
   }
 
   // GitHub Release 资产名映射表：
