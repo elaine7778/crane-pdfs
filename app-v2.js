@@ -17,65 +17,73 @@
 
   const isPdfAuthorized = () => sessionStorage.getItem(SESSION_PDF_AUTH_KEY) === "yes";
 
-  // 多通道下载配置（方案2：自动降级）
-  // 国内访问 GitHub 直连可能超时，按顺序探测以下通道，选择第一个可用的：
-  // 1. 原地址直连（GitHub Releases）
-  // 2. ghfast.top 加速镜像
-  // 3. gh-proxy.com 加速镜像
+  // 多通道下载配置
+  // COS（腾讯云国内节点）为主通道，速度最快无需探测；
+  // GitHub 镜像为兜底（COS 万一不可用时自动切换）。
+  const PDF_COS_BASE = "https://crane-pdfs-1322896806.cos.ap-shanghai.myqcloud.com";
   const PDF_CHANNELS = [
-    "https://gh-proxy.com/",               // 镜像1（实测最快 ~2MB/s）
-    "https://ghfast.top/",                 // 镜像2（实测较慢）
-    "",                                     // 直连兜底
+    "https://gh-proxy.com/",               // 镜像1（兜底）
+    "https://ghfast.top/",                 // 镜像2（兜底）
+    "",                                     // GitHub 直连（最后兜底）
   ];
   const CHANNEL_TIMEOUT_MS = 6000;          // 每通道探测超时
 
-  // 智能下载：先同步开空白标签（防弹窗拦截），并行探测各通道，
-  // 用最快的通道导航到下载地址；全部超时则直连兜底。
+  // 智能下载：COS 主通道直接下载（国内快）；失败则探测镜像兜底
   function smartDownload(url) {
     // 1) 用户手势内同步开标签，保证不被浏览器拦截
     const win = window.open("", "_blank", "noopener,noreferrer");
     if (!win) {
-      // 极端情况弹窗被拦截，退化为当前窗口跳转
       window.location.href = url;
       return;
     }
-    // 2) 并行探测，选最快通道
-    const candidates = PDF_CHANNELS.map((prefix) => prefix + url);
-    let resolved = false;
-    let pending = candidates.length;
-    const controller = new AbortController();
-    const globalTimer = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        win.location.href = url; // 全部超时，直连兜底
-      }
-    }, CHANNEL_TIMEOUT_MS + 3000);
-    const pick = (candidate) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(globalTimer);
-      win.location.href = candidate;
+    const filename = url.split("/").pop();
+    const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(filename)}`;
+    // 2) 优先 COS：用 Image 探测是否存在（PDF 不触发跨域错误），可用则直接下载
+    const probeImg = new Image();
+    let probed = false;
+    const useCos = () => {
+      if (probed) return;
+      probed = true;
+      win.location.href = cosUrl;
     };
-    candidates.forEach((candidate) => {
-      const timer = setTimeout(() => {
-        pending -= 1;
-        if (pending <= 0 && !resolved) {
-          pick(url); // 所有探测超时，直连兜底
-        }
-      }, CHANNEL_TIMEOUT_MS);
-      fetch(candidate, { method: "HEAD", mode: "no-cors", signal: controller.signal })
-        .then(() => {
-          clearTimeout(timer);
-          pick(candidate);
-        })
-        .catch(() => {
-          clearTimeout(timer);
+    const onProbeFail = () => {
+      if (probed) return;
+      probed = true;
+      // COS 不可用，退回多通道探测
+      const candidates = PDF_CHANNELS.map((prefix) => prefix + url);
+      let resolved = false;
+      let pending = candidates.length;
+      const controller = new AbortController();
+      const globalTimer = setTimeout(() => {
+        if (!resolved) { resolved = true; win.location.href = url; }
+      }, CHANNEL_TIMEOUT_MS + 3000);
+      const pick = (candidate) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(globalTimer);
+        win.location.href = candidate;
+      };
+      candidates.forEach((candidate) => {
+        const timer = setTimeout(() => {
           pending -= 1;
-          if (pending <= 0 && !resolved) {
-            pick(url);
-          }
-        });
-    });
+          if (pending <= 0 && !resolved) pick(url);
+        }, CHANNEL_TIMEOUT_MS);
+        fetch(candidate, { method: "HEAD", mode: "no-cors", signal: controller.signal })
+          .then(() => { clearTimeout(timer); pick(candidate); })
+          .catch(() => {
+            clearTimeout(timer);
+            pending -= 1;
+            if (pending <= 0 && !resolved) pick(url);
+          });
+      });
+    };
+    probeImg.onload = useCos;
+    probeImg.onerror = onProbeFail;
+    probeImg.src = cosUrl;
+    // 兜底：3 秒后 COS 还没探测完成，直接用 COS（国内通常很快）
+    setTimeout(() => {
+      if (!probed) { probed = true; win.location.href = cosUrl; }
+    }, 3000);
   }
 
   // GitHub Release 资产名映射表：
@@ -446,17 +454,19 @@
     const box = document.createElement("div");
     box.id = "pdf-channel-box";
     box.className = "pdfChannelBox";
-    const labels = ["最快通道（自动检测）", "镜像 gh-proxy.com", "镜像 ghfast.top", "GitHub 直连"];
-    const urls = [null, ...PDF_CHANNELS.filter((p) => p).map((p) => p + url), url];
-    const tags = ["推荐", "快", "备用", "国内可能超时"];
+    const filename = url.split("/").pop();
+    const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(filename)}`;
+    const labels = ["腾讯云 COS（国内高速）", "最快通道（自动检测）", "镜像 gh-proxy.com", "镜像 ghfast.top", "GitHub 直连"];
+    const urls = [cosUrl, null, ...PDF_CHANNELS.filter((p) => p).map((p) => p + url), url];
+    const tags = ["推荐·快", "自动", "兜底", "兜底", "国内可能超时"];
     box.innerHTML = `
       <div class="pdfChannelInner">
         <b>选择下载通道</b>
-        <small>推荐点"最快通道"，国内直连 GitHub 通常会超时</small>
+        <small>推荐"腾讯云 COS"，国内直连稳定 5-10MB/s</small>
         <div class="pdfChannelList">
           ${urls
             .map(
-              (u, i) => `<button class="pdfChannelBtn${i === 3 ? " danger" : ""}${i === 0 ? " primary" : ""}" type="button" data-url="${u || ""}" data-auto="${u ? "0" : "1"}"><span>${labels[i]}</span><em>${tags[i]}</em></button>`
+              (u, i) => `<button class="pdfChannelBtn${i === 4 ? " danger" : ""}${i === 0 ? " primary" : ""}" type="button" data-url="${u || ""}" data-auto="${u ? "0" : "1"}"><span>${labels[i]}</span><em>${tags[i]}</em></button>`
             )
             .join("")}
         </div>
