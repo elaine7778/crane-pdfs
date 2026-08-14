@@ -38,51 +38,23 @@
       window.location.href = url;
       return;
     }
-    // COS 存的是原始中文文件名
+    // 默认直接用腾讯云 COS（国内高速，存的是原始中文文件名）
     const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(origName)}`;
-    // 2) 优先 COS：用 Image 探测是否存在，可用则直接下载
+    // 简单探测 COS 文件是否存在；不存在则退回 GitHub 直连
     const probeImg = new Image();
     let probed = false;
-    const useCos = () => {
+    probeImg.onload = () => {
       if (probed) return;
       probed = true;
       win.location.href = cosUrl;
     };
-    const onProbeFail = () => {
+    probeImg.onerror = () => {
       if (probed) return;
       probed = true;
-      // COS 不可用，退回多通道探测（url 已是 GitHub 映射名）
-      const candidates = PDF_CHANNELS.map((prefix) => prefix + url);
-      let resolved = false;
-      let pending = candidates.length;
-      const controller = new AbortController();
-      const globalTimer = setTimeout(() => {
-        if (!resolved) { resolved = true; win.location.href = url; }
-      }, CHANNEL_TIMEOUT_MS + 3000);
-      const pick = (candidate) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(globalTimer);
-        win.location.href = candidate;
-      };
-      candidates.forEach((candidate) => {
-        const timer = setTimeout(() => {
-          pending -= 1;
-          if (pending <= 0 && !resolved) pick(url);
-        }, CHANNEL_TIMEOUT_MS);
-        fetch(candidate, { method: "HEAD", mode: "no-cors", signal: controller.signal })
-          .then(() => { clearTimeout(timer); pick(candidate); })
-          .catch(() => {
-            clearTimeout(timer);
-            pending -= 1;
-            if (pending <= 0 && !resolved) pick(url);
-          });
-      });
+      win.location.href = url;
     };
-    probeImg.onload = useCos;
-    probeImg.onerror = onProbeFail;
     probeImg.src = cosUrl;
-    // 兜底：3 秒后 COS 还没探测完成，直接用 COS（国内通常很快）
+    // 兜底：3 秒内未确认，直接走 COS（国内通常极快）
     setTimeout(() => {
       if (!probed) { probed = true; win.location.href = cosUrl; }
     }, 3000);
@@ -436,7 +408,7 @@
         box.remove();
         link.dataset.pdfAuthorized = "true";
         link.querySelector(".pdfLock")?.remove();
-        showChannelPicker(link);
+        smartDownload(link);
       } else {
         box.querySelector("#pdf-password-error").hidden = false;
         input.value = "";
@@ -449,48 +421,7 @@
   }
 
   // 通道选择：密码通过后展示可用的下载通道，自动推荐最快的一个
-  function showChannelPicker(link) {
-    const modalRoot = document.getElementById("modal-root");
-    const existing = modalRoot.querySelector("#pdf-channel-box");
-    if (existing) existing.remove();
-    const box = document.createElement("div");
-    box.id = "pdf-channel-box";
-    box.className = "pdfChannelBox";
-    const url = link.dataset.pdfUrl || link.dataset.pdfOrig;
-    const origName = link.dataset.pdfOrig || url.split("/").pop();
-    const cosUrl = `${PDF_COS_BASE}/${encodeURIComponent(origName)}`;
-    const labels = ["腾讯云 COS（国内高速）", "最快通道（自动检测）", "镜像 gh-proxy.com", "镜像 ghfast.top", "GitHub 直连"];
-    const urls = [cosUrl, null, ...PDF_CHANNELS.filter((p) => p).map((p) => p + url), url];
-    const tags = ["推荐·快", "自动", "兜底", "兜底", "国内可能超时"];
-    box.innerHTML = `
-      <div class="pdfChannelInner">
-        <b>选择下载通道</b>
-        <small>推荐"腾讯云 COS"，国内直连稳定 5-10MB/s</small>
-        <div class="pdfChannelList">
-          ${urls
-            .map(
-              (u, i) => `<button class="pdfChannelBtn${i === 4 ? " danger" : ""}${i === 0 ? " primary" : ""}" type="button" data-url="${u || ""}" data-auto="${u ? "0" : "1"}"><span>${labels[i]}</span><em>${tags[i]}</em></button>`
-            )
-            .join("")}
-        </div>
-        <button class="pdfChannelCancel" type="button">取消</button>
-      </div>`;
-    modalRoot.appendChild(box);
-    const close = () => box.remove();
-    box.querySelectorAll(".pdfChannelBtn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        close();
-        if (btn.dataset.auto === "1") {
-          smartDownload(url);
-        } else {
-          window.open(btn.dataset.url, "_blank", "noopener,noreferrer");
-        }
-      });
-    });
-    box.querySelector(".pdfChannelCancel").addEventListener("click", close);
-  }
-
-  function openPrice() {
+    function openPrice() {
     const modalRoot = document.getElementById("modal-root");
     modalRoot.innerHTML = `
       <div class="modalBackdrop" id="price-backdrop"><section class="priceModal" role="dialog" aria-modal="true" aria-label="集团机械租赁价格通知预览"><header><div><span>价格依据</span><h2>关于调整集团机械租赁价格的通知</h2><p>共2页 · 价格测算按通知档位执行</p></div><button class="closeModal" type="button" aria-label="关闭预览">×</button></header><div class="pricePages"><img src="./manuals/price-notice-p1.webp" alt="价格通知第1页" /><img src="./manuals/price-notice-p2.webp" alt="价格通知第2页" /></div></section></div>`;
